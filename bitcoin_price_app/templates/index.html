@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Price Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            overflow-x: hidden;
+        }
+
+        .ticker-container {
+            width: 100%;
+            background-color: #333;
+            overflow: hidden;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1000;
+            padding: 10px 0;
+            white-space: nowrap;
+            height: 40px;
+        }
+        .ticker {
+            display: inline-block;
+            animation: scroll 30s linear infinite;
+            padding-right: 200px;
+        }
+        @keyframes scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        .ticker:hover {
+            animation-play-state: paused;
+        }
+
+        .container {
+            display: flex;
+            margin-top: 40px;
+            min-height: calc(100vh - 40px);
+        }
+
+        .sidebar {
+            width: 15%;
+            background-color: #ddd;
+            padding: 20px;
+            box-sizing: border-box;
+            height: 100vh;
+            position: fixed;
+            top: 40px;
+            left: 0;
+        }
+        .sidebar-section {
+            margin-bottom: 20px;
+        }
+        .sidebar-section h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .sidebar-section p {
+            margin: 0;
+            color: #666;
+        }
+
+        .content {
+            width: 85%;
+            margin-left: 15%;
+            padding: 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .box {
+            flex: 1;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            min-height: 200px;
+        }
+        .box h2 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="ticker-container">
+        <div class="ticker" id="ticker">{{ initial_ticker_text | safe }}</div>
+    </div>
+
+    <div class="container">
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <h3>Section 1</h3>
+                <p>Placeholder content for sidebar section 1.</p>
+            </div>
+            <div class="sidebar-section">
+                <h3>Section 2</h3>
+                <p>Placeholder content for sidebar section 2.</p>
+            </div>
+            <div class="sidebar-section">
+                <h3>Section 3</h3>
+                <p>Placeholder content for sidebar section 3.</p>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="box">
+                <h2>Box 1</h2>
+                <p>Placeholder content for box 1.</p>
+            </div>
+            <div class="box">
+                <h2>Box 2</h2>
+                <p>Placeholder content for box 2.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        console.log(`[${new Date().toLocaleTimeString()}] Page loaded, initial render complete`);
+        const ticker = document.getElementById('ticker');
+        console.log(`[${new Date().toLocaleTimeString()}] Ticker width: ${ticker.offsetWidth}px`);
+
+        ticker.addEventListener('animationstart', () => {
+            console.log(`[${new Date().toLocaleTimeString()}] Animation started`);
+        });
+        ticker.addEventListener('animationiteration', () => {
+            console.log(`[${new Date().toLocaleTimeString()}] Animation cycle completed`);
+        });
+
+        function updatePriceData() {
+            const startTime = new Date();
+            console.log(`[${startTime.toLocaleTimeString()}] Starting price update`);
+
+            fetch('/api/price')
+                .then(response => response.json())
+                .then(data => {
+                    const fetchEndTime = new Date();
+                    console.log(`[${fetchEndTime.toLocaleTimeString()}] Fetch completed, latency: ${(fetchEndTime - startTime) / 1000}s`);
+                    if (data.error) {
+                        ticker.innerHTML = '<span style="color: red">Error: ' + data.error + '</span>';
+                    } else {
+                        ticker.innerHTML = data.ticker_text;
+                    }
+                    console.log(`[${new Date().toLocaleTimeString()}] Ticker updated, new width: ${ticker.offsetWidth}px`);
+                })
+                .catch(error => {
+                    console.log(`[${new Date().toLocaleTimeString()}] Fetch error: ${error.message}`);
+                    ticker.innerHTML = '<span style="color: red">Error fetching data: ' + error.message + '</span>';
+                });
+        }
+
+        setInterval(updatePriceData, 5000);
+    </script>
+</body>
+</html>
