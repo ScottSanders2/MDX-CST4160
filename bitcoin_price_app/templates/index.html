@@ -128,35 +128,19 @@
     </div>
 
     <script>
-        console.log(`[${new Date().toLocaleTimeString()}] Page loaded, initial render complete`);
-        const ticker = document.getElementById('ticker');
-        console.log(`[${new Date().toLocaleTimeString()}] Ticker width: ${ticker.offsetWidth}px`);
-
-        ticker.addEventListener('animationstart', () => {
-            console.log(`[${new Date().toLocaleTimeString()}] Animation started`);
-        });
-        ticker.addEventListener('animationiteration', () => {
-            console.log(`[${new Date().toLocaleTimeString()}] Animation cycle completed`);
-        });
-
         function updatePriceData() {
-            const startTime = new Date();
-            console.log(`[${startTime.toLocaleTimeString()}] Starting price update`);
-
             fetch('/api/price')
                 .then(response => response.json())
                 .then(data => {
-                    const fetchEndTime = new Date();
-                    console.log(`[${fetchEndTime.toLocaleTimeString()}] Fetch completed, latency: ${(fetchEndTime - startTime) / 1000}s`);
+                    const ticker = document.getElementById('ticker');
                     if (data.error) {
                         ticker.innerHTML = '<span style="color: red">Error: ' + data.error + '</span>';
                     } else {
                         ticker.innerHTML = data.ticker_text;
                     }
-                    console.log(`[${new Date().toLocaleTimeString()}] Ticker updated, new width: ${ticker.offsetWidth}px`);
                 })
                 .catch(error => {
-                    console.log(`[${new Date().toLocaleTimeString()}] Fetch error: ${error.message}`);
+                    const ticker = document.getElementById('ticker');
                     ticker.innerHTML = '<span style="color: red">Error fetching data: ' + error.message + '</span>';
                 });
         }
