@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Price Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            overflow-x: hidden;
+        }
+
+        .ticker-container {
+            width: 100%;
+            background-color: #333;
+            overflow: hidden;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1000;
+            padding: 10px 0;
+            white-space: nowrap;
+        }
+        .ticker {
+            display: inline-block;
+            padding-left: 100%;
+            animation: scroll 20s linear infinite;
+        }
+        .ticker-content {
+            display: inline-block;
+            white-space: nowrap;
+        }
+        @keyframes scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
+        }
+        .ticker:hover {
+            animation-play-state: paused;
+        }
+
+        .user-info {
+            position: fixed;
+            top: 50px;
+            right: 20px;
+            color: #333;
+            z-index: 1001;
+            background: #ddd;
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+        .logout-btn {
+            background: none;
+            border: none;
+            color: #333;
+            text-decoration: underline;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .container {
+            display: flex;
+            margin-top: 40px;
+            min-height: calc(100vh - 40px);
+        }
+
+        .sidebar {
+            width: 15%;
+            background-color: #ddd;
+            padding: 20px;
+            box-sizing: border-box;
+            height: 100vh;
+            position: fixed;
+            top: 40px;
+            left: 0;
+        }
+        .sidebar-section {
+            margin-bottom: 20px;
+        }
+        .sidebar-section h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .watchlist-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            padding: 5px;
+            background: #eee;
+            border-radius: 3px;
+        }
+        .watchlist-symbol {
+            font-weight: bold;
+        }
+        .watchlist-price {
+            color: #00aa00;
+        }
+        .watchlist-change.negative {
+            color: #ff0000;
+        }
+        .watchlist-change.positive {
+            color: #00aa00;
+        }
+
+        .content {
+            width: 85%;
+            margin-left: 15%;
+            padding: 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .box {
+            flex: 1;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            min-height: 200px;
+        }
+        .box h2 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        .preferences-form {
+            margin-top: 20px;
+        }
+        .preferences-list {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .preference-item {
+            display: flex;
+            align-items: center;
+        }
+        .preference-item input {
+            margin-right: 5px;
+        }
+        .save-btn {
+            background-color: #333;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .save-btn:hover {
+            background-color: #555;
+        }
+        .error-message {
+            color: red;
+            margin-top: 10px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="ticker-container">
+        <div class="ticker">
+            <div class="ticker-content" id="ticker">
+                {% for symbol in symbols %}
+                    <span style="color: {% if loop.index0 % 2 == 0 %}#FFFFFF{% else %}#FFFF00{% endif %}">
+                        {{ symbol.replace('USDT', '') }}/USDT:
+                    </span>
+                    <span style="color: {{ prices[symbol].price_color }}">
+                        {{ prices[symbol].price }}
+                    </span>
+                    <span style="color: {% if loop.index0 % 2 == 0 %}#FFFFFF{% else %}#FFFF00{% endif %}">
+                        | 24h Change:
+                    </span>
+                    <span style="color: {{ prices[symbol].change_color }}">
+                        {{ prices[symbol].change }}
+                    </span>
+                    <span style="color: {% if loop.index0 % 2 == 0 %}#FFFFFF{% else %}#FFFF00{% endif %}"> | </span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="user-info">
+        Welcome, {{ username }}!
+        <button class="logout-btn" onclick="window.location.href='/logout'">Logout</button>
+    </div>
+
+    <div class="container">
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <h3>My Watchlist</h3>
+                <div id="watchlist">
+                    {% for symbol in symbols %}
+                        <div class="watchlist-item">
+                            <span class="watchlist-symbol">{{ symbol.replace('USDT', '') }}</span>
+                            <div>
+                                <span class="watchlist-price">{{ prices[symbol].price }}</span>
+                                <span class="watchlist-change {% if prices[symbol].change_color == '#FF0000' %}negative{% else %}positive{% endif %}">
+                                    {{ prices[symbol].change }}
+                                </span>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Update Preferences</h3>
+                <form class="preferences-form" id="preferencesForm">
+                    <div class="preferences-list">
+                        {% for crypto in ['BTC', 'ETH', 'BNB', 'ADA', 'SOL', 'XRP', 'DOT', 'DOGE', 'AVAX', 'SHIB', 'MATIC', 'LTC'] %}
+                            <div class="preference-item">
+                                <input type="checkbox" id="{{ crypto }}" name="symbols" value="{{ crypto }}USDT"
+                                    {% if crypto+'USDT' in symbols %}checked{% endif %}>
+                                <label for="{{ crypto }}">{{ crypto }}</label>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <button type="submit" class="save-btn">Save Preferences</button>
+                    <div class="error-message" id="prefError"></div>
+                </form>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="box">
+                <h2>Price Dashboard</h2>
+                <p>Real-time cryptocurrency prices for your selected assets.</p>
+            </div>
+            <div class="box">
+                <h2>Market Data</h2>
+                <p>Additional market data and analytics will appear here.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize ticker with seamless scrolling
+        function initTicker() {
+            const tickerContent = document.getElementById('ticker');
+            tickerContent.innerHTML = tickerContent.innerHTML + tickerContent.innerHTML;
+        }
+
+        // Update ticker prices
+        function updateTicker() {
+            fetch('/api/prices')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error(data.error);
+                        return;
+                    }
+
+                    const symbols = Object.keys(data);
+                    let tickerHtml = '';
+
+                    symbols.forEach((symbol, index) => {
+                        tickerHtml += `
+                            <span style="color: ${index % 2 === 0 ? '#FFFFFF' : '#FFFF00'}">
+                                ${data[symbol].symbol_short}/USDT:
+                            </span>
+                            <span style="color: ${data[symbol].price_color}">
+                                ${data[symbol].price}
+                            </span>
+                            <span style="color: ${index % 2 === 0 ? '#FFFFFF' : '#FFFF00'}">
+                                | 24h Change:
+                            </span>
+                            <span style="color: ${data[symbol].change_color}">
+                                ${data[symbol].change}
+                            </span>
+                            <span style="color: ${index % 2 === 0 ? '#FFFFFF' : '#FFFF00'}"> | </span>
+                        `;
+                    });
+
+                    const tickerContent = document.getElementById('ticker');
+                    tickerContent.innerHTML = tickerHtml + tickerHtml;
+                })
+                .catch(error => {
+                    console.error('Error updating ticker:', error);
+                });
+        }
+
+        // Update watchlist
+        function updateWatchlist() {
+            fetch('/api/prices')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error(data.error);
+                        return;
+                    }
+
+                    const symbols = Object.keys(data);
+                    let html = '';
+
+                    symbols.forEach(symbol => {
+                        html += `
+                            <div class="watchlist-item">
+                                <span class="watchlist-symbol">${data[symbol].symbol_short}</span>
+                                <div>
+                                    <span class="watchlist-price">${data[symbol].price}</span>
+                                    <span class="watchlist-change ${data[symbol].change_color === '#FF0000' ? 'negative' : 'positive'}">
+                                        ${data[symbol].change}
+                                    </span>
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    document.getElementById('watchlist').innerHTML = html;
+                })
+                .catch(error => {
+                    console.error('Error updating watchlist:', error);
+                });
+        }
+
+        // Handle preferences form
+        document.getElementById('preferencesForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const errorElement = document.getElementById('prefError');
+            errorElement.style.display = 'none';
+
+            const selected = Array.from(document.querySelectorAll('input[name="symbols"]:checked')).map(el => el.value);
+            if (selected.length === 0) {
+                errorElement.textContent = 'Please select at least one cryptocurrency';
+                errorElement.style.display = 'block';
+                return;
+            }
+
+            const saveBtn = this.querySelector('.save-btn');
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+
+            const formData = new FormData();
+            selected.forEach(symbol => formData.append('symbols[]', symbol));
+
+            fetch('/update_preferences', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    errorElement.textContent = data.error;
+                    errorElement.style.display = 'block';
+                    return;
+                }
+
+                // Update UI with new preferences
+                updateTicker();
+                updateWatchlist();
+            })
+            .catch(error => {
+                errorElement.textContent = 'Failed to save preferences';
+                errorElement.style.display = 'block';
+                console.error('Error:', error);
+            })
+            .finally(() => {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Preferences';
+            });
+        });
+
+        // Initialize and set intervals
+        initTicker();
+        updateWatchlist();
+        setInterval(updateTicker, 5000);
+        setInterval(updateWatchlist, 5000);
+    </script>
+</body>
+</html>
