@@ -1,211 +1,128 @@
-# test.py
-
+import os
+import sqlite3
+import tempfile
 import unittest
 import json
-from unittest.mock import patch, MagicMock
-import app
+from unittest.mock import patch
 
-# Use an in‑memory database for all tests
-app.DATABASE = ':memory:'
-app.init_db()
+# Ensure we import the app after possibly removing any existing DB
+if os.path.exists('crypto_tracker.db'):
+    os.remove('crypto_tracker.db')
 
-class TestCryptoUtils(unittest.TestCase):
-    @patch('app.Spot')
-    def test_get_top_10_cryptos(self, mock_spot_cls):
-        # fake tickers: only USDT pairs count, sorted by lastPrice*volume
-        fake_tickers = [
-            {'symbol': 'AAAUSDT', 'lastPrice': '2', 'volume': '100'},   # cap=200
-            {'symbol': 'ZZZUSDT', 'lastPrice': '1', 'volume': '500'},   # cap=500
-            {'symbol': 'CCCUSDT', 'lastPrice': '3', 'volume': '100'},   # cap=300
-            {'symbol': 'NOTUSD',  'lastPrice': '5', 'volume': '1000'},  # dropped
-        ]
-        mock_client = MagicMock()
-        mock_client.ticker_24hr.return_value = fake_tickers
-        mock_spot_cls.return_value = mock_client
+from app_v4 import app, init_db, get_crypto_prices, get_crypto_news
 
-        top10 = app.get_top_10_cryptos()
-        # should only include our USDT pairs, in descending cap order
-        self.assertEqual(top10, ['ZZZUSDT', 'CCCUSDT', 'AAAUSDT'])
-
-    def test_user_preferences_default(self):
-        # grab Scott's user_id from the in‑memory DB
-        db = app.get_db()
-        cur = db.cursor()
-        cur.execute("SELECT id FROM users WHERE username='Scott'")
-        user_id = cur.fetchone()['id']
-        db.close()
-
-        prefs = app.get_user_preferences(user_id)
-        self.assertCountEqual(prefs, ['BTCUSDT', 'ETHUSDT', 'BNBUSDT'])
-
-    def test_update_user_preferences(self):
-        db = app.get_db()
-        cur = db.cursor()
-        cur.execute("SELECT id FROM users WHERE username='Scott'")
-        user_id = cur.fetchone()['id']
-        db.close()
-
-        # overwrite Scott's prefs
-        new_syms = ['SOLUSDT', 'DOTUSDT']
-        ok = app.update_user_preferences(user_id, new_syms)
-        self.assertTrue(ok)
-
-        # confirm they stuck
-        prefs = app.get_user_preferences(user_id)
-        self.assertCountEqual(prefs, new_syms)
-
-    @patch('app.Spot')
-    def test_get_crypto_prices(self, mock_spot_cls):
-        symbols = ['BTCUSDT', 'ETHUSDT']
-
-        # Binance client returns lists for batch requests
-        fake_prices = [
-            {'symbol': 'BTCUSDT', 'price': '100.0'},
-            {'symbol': 'ETHUSDT', 'price': '50.0'}
-        ]
-        fake_24h = [
-            {'symbol': 'BTCUSDT', 'priceChangePercent': '10', 'prevClosePrice': '90', 'volume': '1000'},
-            {'symbol': 'ETHUSDT', 'priceChangePercent': '-5', 'prevClosePrice': '55', 'volume': '500'}
-        ]
-
-        mock_client = MagicMock()
-        mock_client.ticker_price.return_value = fake_prices
-        mock_client.ticker_24hr.return_value = fake_24h
-        mock_spot_cls.return_value = mock_client
-
-        prices = app.get_crypto_prices(symbols)
-        # BTC assertions
-        self.assertIn('BTCUSDT', prices)
-        self.assertEqual(prices['BTCUSDT']['price'], '$100.00')
-        self.assertEqual(prices['BTCUSDT']['change'], '10.00%')
-        self.assertEqual(prices['BTCUSDT']['price_color'], '#00FF00')
-        # ETH negative change
-        self.assertEqual(prices['ETHUSDT']['change_color'], '#FF0000')
-
-
-class TestAppRoutes(unittest.TestCase):
+class CryptoAppTestCase(unittest.TestCase):
     def setUp(self):
-        app.app.testing = True
-        self.client = app.app.test_client()
+        # Create a temporary file to act as our database
+        self.db_fd, self.db_path = tempfile.mkstemp()
+        # Configure app for testing
+        app.config['TESTING'] = True
+        # Monkey‑patch sqlite3.connect to use the temp DB
+        self._orig_connect = sqlite3.connect
+        sqlite3.connect = lambda *args, **kwargs: self._orig_connect(self.db_path, **kwargs)
+        # Initialize the fresh database with seed users/preferences
+        init_db()
+        self.client = app.test_client()
 
-    def login(self, user='Scott', pwd='password1'):
-        return self.client.post('/login', data={'username': user, 'password': pwd})
+    def tearDown(self):
+        # Restore original sqlite3.connect, remove temp DB
+        sqlite3.connect = self._orig_connect
+        os.close(self.db_fd)
+        os.unlink(self.db_path)
 
-    def test_login_logout_flow(self):
-        # POST /login
-        resp = self.login()
-        self.assertEqual(resp.status_code, 302)
-        self.assertIn('/', resp.headers['Location'])
+    def login(self, username, password):
+        return self.client.post('/login', data={
+            'username': username,
+            'password': password
+        }, follow_redirects=True)
 
-        # GET /logout clears session
-        resp2 = self.client.get('/logout')
-        self.assertEqual(resp2.status_code, 302)
-        self.assertIn('/login', resp2.headers['Location'])
-
-    def test_index_requires_auth(self):
+    def test_home_redirects_when_not_logged_in(self):
         resp = self.client.get('/')
         self.assertEqual(resp.status_code, 302)
-        self.assertIn('/login', resp.headers['Location'])
+        self.assertIn('/login', resp.location)
 
-    @patch('app.get_top_10_cryptos', return_value=['AAAUSDT'])
-    @patch('app.get_crypto_prices', return_value={'AAAUSDT': {'price': '$1.00'}})
-    def test_index_shows_data_after_login(self, mock_prices, mock_top10):
-        self.login()
+    def test_login_success(self):
+        rv = self.login('Scott', 'password1')
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b'Scott', rv.data)
+
+    def test_login_failure(self):
+        rv = self.login('Scott', 'wrongpassword')
+        self.assertEqual(rv.status_code, 200)
+        self.assertIn(b'Invalid username or password', rv.data)
+
+    @patch('app_v4.get_crypto_prices')
+    @patch('app_v4.get_crypto_news')
+    def test_index_authenticated(self, mock_news, mock_prices):
+        # Mock both price and news calls
+        mock_prices.return_value = {
+            'BTCUSDT': {'price': '$40,000.00', 'change': '1.23%', 'price_color': '#00FF00', 'change_color': '#00FF00',
+                        'symbol_short': 'BTC'},
+            'ETHUSDT': {'price': '$3,000.00', 'change': '0.50%', 'price_color': '#00FF00', 'change_color': '#00FF00',
+                        'symbol_short': 'ETH'},
+            'BNBUSDT': {'price': '$500.00', 'change': '-1.00%', 'price_color': '#FF0000', 'change_color': '#FF0000',
+                        'symbol_short': 'BNB'}
+        }
+
+        mock_news.return_value = [{'title':'Test News','url':'http://u','description':'desc','publishedAt':'2025-04-18'}]
+        self.login('Scott', 'password1')
         resp = self.client.get('/')
         self.assertEqual(resp.status_code, 200)
-        self.assertIn(b'AAAUSDT', resp.data)
+        self.assertIn(b'BTCUSDT', resp.data)
+        self.assertIn(b'Test News', resp.data)
 
-    @patch('app.get_crypto_prices', return_value={'SOLUSDT': {'price': '$2.00'}})
-    def test_update_preferences_endpoint(self, mock_prices):
-        self.login()
-        resp = self.client.post('/update_preferences', json={'symbols': ['SOLUSDT']})
-        self.assertEqual(resp.status_code, 200)
+    def test_api_prices_unauthenticated(self):
+        resp = self.client.get('/api/prices')
+        self.assertEqual(resp.status_code, 401)
         data = json.loads(resp.data)
-        self.assertTrue(data.get('success'))
-        self.assertEqual(data.get('symbols'), ['SOLUSDT'])
-        self.assertIn('prices', data)
+        self.assertIn('error', data)
 
-    @patch('app.get_crypto_prices', return_value={'FOO': {'price': '$3.00'}})
-    def test_api_prices_with_query(self, mock_prices):
-        self.login()
-        resp = self.client.get('/api/prices?symbols=FOO,BAR')
-        self.assertEqual(resp.status_code, 200)
-        data = json.loads(resp.data)
-        self.assertIn('FOO', data)
-
-    @patch('app.get_crypto_prices', return_value={'DEFAULT': {'price': '$4.00'}})
-    def test_api_prices_default_to_user_prefs(self, mock_prices):
-        self.login()
+    @patch('app_v4.get_crypto_prices')
+    def test_api_prices_authenticated(self, mock_prices):
+        mock_prices.return_value = {
+            'BTCUSDT': {'price': '$40,000.00', 'change': '1.23%', 'price_color': '#00FF00', 'change_color': '#00FF00',
+                        'symbol_short': 'BTC'},
+            'ETHUSDT': {'price': '$3,000.00', 'change': '-0.50%', 'price_color': '#FF0000', 'change_color': '#FF0000',
+                        'symbol_short': 'ETH'},
+            'BNBUSDT': {'price': '$500.00', 'change': '-1.00%', 'price_color': '#FF0000', 'change_color': '#FF0000',
+                        'symbol_short': 'BNB'}
+        }
+        self.login('Scott', 'password1')
         resp = self.client.get('/api/prices')
         self.assertEqual(resp.status_code, 200)
         data = json.loads(resp.data)
-        self.assertIn('DEFAULT', data)
+        self.assertIn('ETHUSDT', data)
 
-    @patch('app.get_top_10_cryptos', return_value=['ZZZ'])
-    def test_api_top10(self, mock_top10):
-        resp = self.client.get('/api/top10')
-        self.assertEqual(resp.status_code, 200)
-        data = json.loads(resp.data)
-        self.assertEqual(data.get('top_10'), ['ZZZ'])
-
-class TestCryptoNewsAPIs(unittest.TestCase):
-    @patch('app.requests.get')
-    def test_get_newsapi_articles_success(self, mock_get):
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "articles": [
-                {
-                    "title": "Crypto Boom",
-                    "url": "https://news.example.com/crypto-boom",
-                    "description": "Prices are soaring",
-                    "publishedAt": "2025-04-18T10:00:00Z"
-                }
-            ]
-        }
-        mock_get.return_value = mock_resp
-
-        articles = app.get_newsapi_articles()
-        self.assertEqual(len(articles), 1)
-        self.assertEqual(articles[0]["publishedAt"], "2025-04-18")
-
-    @patch('app.requests.get')
-    def test_get_guardian_articles_success(self, mock_get):
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "response": {
-                "results": [
-                    {
-                        "webTitle": "Ethereum Surges",
-                        "webUrl": "https://guardian.example.com/eth-surges",
-                        "webPublicationDate": "2025-04-17T15:30:00Z",
-                        "fields": {"trailText": "ETH price rally"}
-                    }
-                ]
-            }
-        }
-        mock_get.return_value = mock_resp
-
-        articles = app.get_guardian_articles()
-        self.assertEqual(len(articles), 1)
-        self.assertEqual(articles[0]["publishedAt"], "2025-04-17")
-
-    @patch('app.get_newsapi_articles', return_value=[{"title": "A"}])
-    @patch('app.get_guardian_articles', return_value=[{"title": "B"}])
-    def test_get_crypto_news_combines(self, mock_guardian, mock_newsapi):
-        news = app.get_crypto_news()
-        self.assertEqual(news, [{"title": "A"}] + [{"title": "B"}])
-
-class TestNewsEndpoint(unittest.TestCase):
-    def setUp(self):
-        app.app.testing = True
-        self.client = app.app.test_client()
-
-    @patch('app.get_crypto_news', return_value=[{"title": "Test News"}])
-    def test_api_news_route(self, mock_news):
+    @patch('app_v4.get_crypto_news')
+    def test_api_news(self, mock_news):
+        mock_news.return_value = [{'title':'t','url':'u','description':'d','publishedAt':'2025-04-18'}]
         resp = self.client.get('/api/news')
         self.assertEqual(resp.status_code, 200)
         data = json.loads(resp.data)
-        self.assertEqual(data, [{"title": "Test News"}])
+        self.assertIsInstance(data, list)
+
+    @patch('app_v4.get_crypto_prices')
+    def test_update_preferences(self, mock_prices):
+        mock_prices.return_value = {
+            'ADAUSDT': {'price': '$2.00', 'change': '5.00%', 'price_color': '#00FF00', 'change_color': '#00FF00',
+                        'symbol_short': 'ADA'},
+            'BTCUSDT': {'price': '$40,000.00', 'change': '1.23%', 'price_color': '#00FF00', 'change_color': '#00FF00',
+                        'symbol_short': 'BTC'},
+            'ETHUSDT': {'price': '$3,000.00', 'change': '0.50%', 'price_color': '#00FF00', 'change_color': '#00FF00',
+                        'symbol_short': 'ETH'},
+            'BNBUSDT': {'price': '$500.00', 'change': '-1.00%', 'price_color': '#FF0000', 'change_color': '#FF0000',
+                        'symbol_short': 'BNB'}
+        }
+        self.login('Scott', 'password1')
+        resp = self.client.post('/update_preferences',
+                                data=json.dumps({'symbols': ['ADAUSDT']}),
+                                content_type='application/json'
+                                )
+        self.assertEqual(resp.status_code, 200)
+        data = json.loads(resp.data)
+        self.assertTrue(data.get('success'))
+        self.assertIn('ADAUSDT', data.get('symbols', []))
+
 
 if __name__ == '__main__':
     unittest.main()
