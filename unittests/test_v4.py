@@ -6,8 +6,8 @@ import json
 from unittest.mock import patch
 
 # Ensure we import the app after possibly removing any existing DB
-if os.path.exists('crypto_tracker.db'):
-    os.remove('crypto_tracker.db')
+if os.path.exists('../crypto_price_app_v4 (added news)/crypto_tracker.db'):
+    os.remove('../crypto_price_app_v4 (added news)/crypto_tracker.db')
 
 from app_v4 import app, init_db, get_crypto_prices, get_crypto_news
 
