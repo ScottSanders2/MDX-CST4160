@@ -101,7 +101,8 @@ class CryptoAppTestCase(unittest.TestCase):
         data = json.loads(resp.data)
         self.assertIsInstance(data, list)
 
-    @patch('app_v4.get_crypto_prices')
+
+@patch('app_v4.get_crypto_prices')
     def test_update_preferences(self, mock_prices):
         mock_prices.return_value = {
             'ADAUSDT': {'price': '$2.00', 'change': '5.00%', 'price_color': '#00FF00', 'change_color': '#00FF00',
