@@ -221,7 +221,7 @@ def index():
     other_prefs = [sym for sym in user_prefs if sym not in top_10]
     news = get_crypto_news()
 
-    return render_template('index_v3.html',
+    return render_template('index_v4.1.html',
                            username=session.get('username'),
                            top_10_cryptos=top_10,
                            top_10_prefs=top_10_prefs,
