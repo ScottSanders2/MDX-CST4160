@@ -2,7 +2,7 @@ import unittest
 import json
 from unittest.mock import patch, MagicMock
 from app import app, get_crypto_prices
-
+#Updating
 class TestGetCryptoPrices(unittest.TestCase):
     @patch('app.Spot')
     def test_get_crypto_prices_success(self, mock_spot_cls):
