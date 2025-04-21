@@ -54,20 +54,7 @@ A real-time cryptocurrency price tracking application with watchlist functionali
 
 ### Install dependencies:
 
-- pip install -r requirements.txt
-
-### Configure environment variables: 
-Create a .env file in the root directory with your API keys:
-
-- BINANCE_API_KEY=your_api_key_here # optional
-- BINANCE_API_SECRET=your_api_secret_here # optional
-- NEWSAPI_KEY=your_newsapi_key_here # optional
-- GUARDIAN_KEY=your_guardian_key_here # optional
-- FLASK_SECRET_KEY=your_secret_key_here # optional
-
-### Initialize the database:
-
-- python init_db.py
+- pip install -r requirements
 
 ## Running the Application
 
