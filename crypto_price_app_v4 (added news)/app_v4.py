@@ -5,7 +5,7 @@ import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import threading
-import requests  # ← добавлено для News API
+import requests  # News API
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'

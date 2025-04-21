@@ -203,7 +203,7 @@ def index():
     all_symbols = list(set(top_10 + user_prefs))
     prices = get_crypto_prices(all_symbols)
 
-    # Split prefs into top 10 and others
+    # Split preferences into top 10 and others
     top_10_prefs = [sym for sym in user_prefs if sym in top_10]
     other_prefs = [sym for sym in user_prefs if sym not in top_10]
 
@@ -301,7 +301,7 @@ def api_top10():
 
 
 if __name__ == '__main__':
-    # Initialize top 10 cryptos
+    # Initialise top 10 cryptos
     get_top_10_cryptos()
 
     port = 5002
