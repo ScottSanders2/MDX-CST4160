@@ -103,6 +103,11 @@ The application can be configured by editing app_v4.1.py:
 
 ## Troubleshooting
 
+- Issue: Unable to run 'app_v4.1.py' - various errors
+  - Check that your Python Interpreter is pointing at the 'venv' virtual environment in the version of the app that you are trying to run
+  - Conflicts with 'venv' working directory can result in issues runing the application, such as 'binance.spot' not installing correctly
+  - Ensure that all requirements are loaded in the .venv virtual environment of the version of the application you are running
+
 - Issue: Prices not updating
   - Verify your Binance API keys are correct
   - Check your internet connection
