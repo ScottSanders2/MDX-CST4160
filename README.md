@@ -3,8 +3,6 @@ MDX Dubai - MSc Fintech - CST4160 Advanced Software Development for Financial Te
 
 # Crypto Price Tracker Application
 
-![Crypto Tracker Screenshot](https://via.placeholder.com/800x400?text=Crypto+Tracker+Screenshot)
-
 A real-time cryptocurrency price tracking application with watchlist functionality and crypto news integration.
 
 ## Features
